@@ -1,0 +1,7 @@
+version: '3.8'
+
+services:
+  sua-aplicacao-s3:
+    build: .
+    env_file:
+      - .env
