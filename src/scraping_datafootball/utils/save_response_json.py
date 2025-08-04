@@ -1,0 +1,52 @@
+import os
+import json
+import boto3
+from io import StringIO
+
+def save_response_to_json(data, path, title):
+    """
+    Salva dados em formato JSON no caminho especificado com o título dado.
+
+    :param data: dict ou qualquer objeto serializável - Os dados a serem salvos no formato JSON.
+    :param path: str - O caminho do diretório onde o arquivo será salvo.
+    :param title: str - O título (nome) do arquivo JSON.
+    """
+    # Garante que o caminho exista
+    os.makedirs(path, exist_ok=True)
+    
+    # Concatena o caminho com o título e a extensão .json
+    file_path = os.path.join(path, f"{title}.json")
+    
+    # Salva os dados como JSON
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+    
+    print(f"Arquivo JSON salvo com sucesso em: {file_path}")
+
+def save_response_json_to_s3(data, bucket_name, path, title, region='us-east-1'):
+    """
+    Salva dados em formato JSON diretamente em um bucket do Amazon S3.
+
+    :param data: dict - Os dados a serem serializados e salvos.
+    :param bucket_name: str - O nome do bucket S3 de destino.
+    :param file_key: str - O caminho e nome do arquivo dentro do bucket (ex: 'data/outputs/').
+    :param title: str - O nome do arquivo dentro do bucket (ex: 'nome_do_arquivo.json').
+    :param region: str - A região da AWS onde o bucket S3 está localizado.
+    """
+    try:
+        json_data = json.dumps(data, ensure_ascii=False, indent=4)
+
+        s3 = boto3.client('s3', region_name=region)
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=f"{path}/{title}",
+            Body=json_data,
+            ContentType='application/json'
+        )
+        
+        print(f"Arquivo JSON salvo com sucesso em s3://{bucket_name}/{path}/{title}.json")
+        return True
+
+    except Exception as e:
+        print(f"Erro ao salvar arquivo no S3: {e}")
+        raise e
