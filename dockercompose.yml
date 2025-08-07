@@ -3,5 +3,6 @@ version: '3.8'
 services:
   sua-aplicacao-s3:
     build: .
+    restart: "no"
     env_file:
       - .env

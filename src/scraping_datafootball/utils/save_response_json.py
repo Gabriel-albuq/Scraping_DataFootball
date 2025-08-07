@@ -29,9 +29,11 @@ def save_response_json_to_s3(data, bucket_name, path, title, region='us-east-1')
 
     :param data: dict - Os dados a serem serializados e salvos.
     :param bucket_name: str - O nome do bucket S3 de destino.
-    :param file_key: str - O caminho e nome do arquivo dentro do bucket (ex: 'data/outputs/').
-    :param title: str - O nome do arquivo dentro do bucket (ex: 'nome_do_arquivo.json').
+    :param path: str - O caminho do diretório dentro do bucket (ex: 'data/raw/').
+    :param title: str - O nome do arquivo a ser salvo, sem a extensão (ex: 'esportes').
     :param region: str - A região da AWS onde o bucket S3 está localizado.
+
+    :return: str - True se tudo der certo ou o erro.
     """
     try:
         json_data = json.dumps(data, ensure_ascii=False, indent=4)
@@ -44,9 +46,9 @@ def save_response_json_to_s3(data, bucket_name, path, title, region='us-east-1')
             ContentType='application/json'
         )
         
-        print(f"Arquivo JSON salvo com sucesso em s3://{bucket_name}/{path}/{title}.json")
+        print(f"Arquivo JSON salvo com sucesso no s3://{bucket_name}/{path}/{title}")
         return True
 
     except Exception as e:
-        print(f"Erro ao salvar arquivo no S3: {e}")
+        print(f"Erro ao salvar o arquivo JSON no S3: {e}")
         raise e
