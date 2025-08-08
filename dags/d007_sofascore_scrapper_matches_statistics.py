@@ -2,7 +2,7 @@ from airflow.decorators import dag, task
 from datetime import datetime
 import os
 
-from src.scraping_datafootball.steps.s005_steps_rounds import extract_rounds, transform_rounds
+from src.scraping_datafootball.steps.s007_steps_matches_statistics import extract_matches_statistics, transform_matches_statistics
 
 from src.scraping_datafootball.utils.check_existencia_s3 import check_existencia_s3
 from src.scraping_datafootball.utils.save_response_json import save_response_to_json, save_response_json_to_s3
@@ -13,7 +13,7 @@ from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_cs
 # Inputs
 save_location = 's3'
 source = 'sofascore'
-dag_path = '05-rounds'
+dag_path = '07-matches-statistics'
 bucket_name = 'gaa-datafootball'
 region_name = 'us-east-1'
 input_dict = [
@@ -32,12 +32,12 @@ input_dict = [
 ]
 
 @dag(
-    dag_id="sofascore_scrapper_05_rounds",
-    description="Extração de dados de Rodadas do SofaScore",
+    dag_id="sofascore_scrapper_07_matches_statistics",
+    description="Extração de dados de Estatísticas das Partidas do SofaScore",
     schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=['scraping', 'seasons']
+    tags=['scraping', 'matches_statistics']
 )
 def pipeline():
     @task
@@ -84,6 +84,51 @@ def pipeline():
     def consolidar_listas(novo_input_dict):
         lista_consolidada = [item for sublist in novo_input_dict for item in sublist]
         return lista_consolidada
+    
+    @task
+    def obter_round_slug(novo_input_dict):
+        sport = novo_input_dict['sport']
+        country = novo_input_dict['country']
+        tournament = novo_input_dict['tournament']
+        year = novo_input_dict['year']
+        season = novo_input_dict['season']
+
+        # Seasons: 02-silver
+        layer = '02-silver'
+        path_rounds = f'{source}/{layer}/05-rounds'
+        title_rounds = f"rounds_{sport}_{country}_{tournament}_{season}"
+
+        print(f"Lendo dados do S3 em: s3://{bucket_name}/{path_rounds}/{title_rounds}")
+        df = load_csv_from_s3(
+            bucket_name=bucket_name,
+            path=path_rounds,
+            title=title_rounds,
+            region=region_name,
+        )
+
+        df['season_id'] = df['season_id'].astype(str)
+        df['round'] = df['round'].astype(str)
+        df['slug'] = df['slug'].astype(str)
+        df = df[df['season_id'] == season]
+        list_values = [tuple(map(str, raw)) for raw in df[['round', 'slug']].drop_duplicates().to_numpy()]
+        
+        novo_input_dict = [
+            {
+                "sport": sport,
+                "country": country,
+                "tournament": tournament,
+                "year": year,
+                "season": season,
+                "round": value[0],
+                "slug": value[1]
+            }
+            for value in list_values
+        ]
+
+        if not list_values:
+            raise ValueError(f"Não foram encontradas rodadas para a temporada {season}.")
+
+        return novo_input_dict
 
     @task
     def verificar_existencia(input_dict):
@@ -94,7 +139,9 @@ def pipeline():
         tournament = input_dict['tournament']
         year = input_dict['year']
         season = input_dict['season']
-        title = f"rounds_{sport}_{country}_{tournament}_{season}"
+        round = input_dict['round']
+        slug = input_dict['slug']
+        title = f"rounds_{sport}_{country}_{tournament}_{season}_{round}_{slug}"
 
         # 01-bronze
         layer = '01-bronze'
@@ -126,7 +173,9 @@ def pipeline():
             "country": country,
             "tournament": tournament,
             "year": year,
-            "season": season
+            "season": season,
+            "round": round,
+            "slug": slug
         }
 
     @task
@@ -147,9 +196,11 @@ def pipeline():
         tournament = verificacao_dict['tournament']
         year = verificacao_dict['year']
         season = verificacao_dict['season']
+        round = verificacao_dict['round']
+        slug = verificacao_dict['slug']
 
         if (exist_bronze == False or forcar == True):
-            response_seasons = extract_rounds(tournament, season)
+            response_seasons = extract_matches_statistics(tournament, season, round, slug)
             if response_seasons:
                 save_response_json_to_s3(
                     data=response_seasons, 
@@ -168,7 +219,9 @@ def pipeline():
                     "country": country,
                     "tournament": tournament,
                     "year": year,
-                    "season": season
+                    "season": season,
+                    "round": round,
+                    "slug": slug
                 }
             else:
                 error_message = "Não foi possível extrair dados das rodadas. A extração retornou um valor vazio ou nulo."
@@ -186,7 +239,9 @@ def pipeline():
                     "country": country,
                     "tournament": tournament,
                     "year": year,
-                    "season": season
+                    "season": season,
+                    "round": round,
+                    "slug": slug
             }
 
     @task
@@ -206,6 +261,8 @@ def pipeline():
         tournament = extract_dict['tournament']
         year = extract_dict['year']
         season = extract_dict['season']
+        round = extract_dict['round']
+        slug = extract_dict['slug']
 
         if (exist_silver == False or forcar == True):
             try:
@@ -217,22 +274,17 @@ def pipeline():
                     region=region_name
                 )
 
-                if json_data is not None:
-                    df_data = transform_rounds(json_data, datetime_now)
-                    if not df_data.empty:
-                        save_dataframe_csv_to_s3(
-                            df=df_data,
-                            bucket_name=bucket_name,
-                            path=path_silver,
-                            title=title,
-                            region=region_name
-                        )
-                        print(f"Salvando dados transformados no S3 em: s3://{bucket_name}/{path_silver}/{title}.csv")
+                df_data = transform_matches_statistics(json_data, datetime_now)
+                if not df_data.empty:
+                    save_dataframe_csv_to_s3(
+                    df=df_data,
+                    bucket_name=bucket_name,
+                    path=path_silver,
+                    title=title,
+                    region=region_name
+                )
 
-                    else:
-                        print("O DataFrame está vazio. Nada a salvar.")
-                else:
-                    print(f"Erro: json_data para o título '{title}' é None. Pulando a transformação.")
+                print(f"Salvando dados transformados no S3 em: s3://{bucket_name}/{path_silver}/{title}.csv")
 
             except Exception as e:
                 error_message = f"Erro ao transformar e salvar os dados dos torneios: {e}"
@@ -243,10 +295,10 @@ def pipeline():
 
     novo_input_dict = obter_season_id.expand(input_dict=input_dict)
     novo_input_dict = consolidar_listas(novo_input_dict)
+    novo_input_dict = obter_round_slug.expand(novo_input_dict=novo_input_dict)
+    novo_input_dict = consolidar_listas(novo_input_dict)
     verificacao_dict = verificar_existencia.expand(input_dict=novo_input_dict)
     extract_dict = extrair_e_salvar_dados.partial(forcar=False).expand(verificacao_dict=verificacao_dict)
     transformar_e_salvar_dados.partial(forcar=False).expand(extract_dict=extract_dict)
 
 pipeline()  
-
-pipeline()
