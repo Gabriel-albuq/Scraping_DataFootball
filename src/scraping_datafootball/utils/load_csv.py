@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 #     's3',
 #     region_name=aws_region # Opcional: Se a variável de região estiver definida
 # )
-
 def load_csv_from_s3(bucket_name, path, title, region='us-east-1', sep=','):
     """
     Carrega e retorna um arquivo CSV de um bucket do Amazon S3 como um DataFrame do pandas.
