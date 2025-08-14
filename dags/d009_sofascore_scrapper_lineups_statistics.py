@@ -2,7 +2,7 @@ from airflow.decorators import dag, task
 from datetime import datetime
 import os
 
-from src.scraping_datafootball.steps.s007_steps_matches_statistics import extract_matches_statistics, transform_matches_statistics
+from src.scraping_datafootball.steps.s009_steps_lineups_statistics import extract_lineups_statistics, transform_lineups_statistics
 
 from src.scraping_datafootball.utils.check_existencia_s3 import check_existencia_s3
 from src.scraping_datafootball.utils.save_response_json import save_response_to_json, save_response_json_to_s3
@@ -13,7 +13,7 @@ from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_cs
 # Inputs
 save_location = 's3'
 source = 'sofascore'
-dag_path = '07-matches-statistics'
+dag_path = '09-lineups-statistics'
 bucket_name = 'gaa-datafootball'
 region_name = 'us-east-1'
 input_dict = [
@@ -32,12 +32,12 @@ input_dict = [
 ]
 
 @dag(
-    dag_id="sofascore_scrapper_07_matches_statistics",
-    description="Extração de dados de Estatísticas das Partidas do SofaScore",
+    dag_id="sofascore_scrapper_09_lineups_statistics",
+    description="Extração de dados de Estatísticas dos Jogadores das Partidas do SofaScore",
     schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=['scraping', 'matches_statistics']
+    tags=['scraping', 'lineups']
 )
 def pipeline():
     @task
@@ -171,7 +171,7 @@ def pipeline():
         ]
 
         if not list_values:
-            raise ValueError(f"Não foram encontradas partidas para a temporada {season} rodada {round} slug {slug}.")
+            raise ValueError(f"Não foram encontradas estatisticas dos jogadores para a temporada {season} rodada {round} slug {slug}.")
 
         return novo_input_dict
 
@@ -187,7 +187,7 @@ def pipeline():
         round = input_dict['round']
         slug = input_dict['slug']
         match = input_dict['match']
-        title = f"matches_statistics_{sport}_{country}_{tournament}_{season}_{round}_{slug}_{match}"
+        title = f"lineups_{sport}_{country}_{tournament}_{season}_{round}_{slug}_{match}"
 
         # 01-bronze
         layer = '01-bronze'
@@ -228,7 +228,7 @@ def pipeline():
     @task
     def extrair_e_salvar_dados(verificacao_dict, forcar = False):
         """
-        Extrai os dados de Estatísticas da Partida e salva na camada Bronze no S3.
+        Extrai os dados de Estatísticas dos Jogadores e salva na camada Bronze no S3.
         Retorna o caminho completo do arquivo salvo.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -248,7 +248,7 @@ def pipeline():
         match = verificacao_dict['match']
 
         if (exist_bronze == False or forcar == True):
-            response_seasons = extract_matches_statistics(match)
+            response_seasons = extract_lineups_statistics(match)
             if response_seasons:
                 save_response_json_to_s3(
                     data=response_seasons, 
@@ -273,7 +273,7 @@ def pipeline():
                     "match": match
                 }
             else:
-                error_message = "Não foi possível extrair dados das estatisticas da partida. A extração retornou um valor vazio ou nulo."
+                error_message = "Não foi possível extrair dados das estatisticas dos jogadores da partida. A extração retornou um valor vazio ou nulo."
                 print(error_message)
                 return None
 
@@ -326,7 +326,7 @@ def pipeline():
                     region=region_name
                 )
 
-                df_data = transform_matches_statistics(json_data, datetime_now)
+                df_data = transform_lineups_statistics(json_data, datetime_now)
                 if not df_data.empty:
                     save_dataframe_csv_to_s3(
                     df=df_data,
@@ -339,7 +339,7 @@ def pipeline():
                 print(f"Salvando dados transformados no S3 em: s3://{bucket_name}/{path_silver}/{title}.csv")
 
             except Exception as e:
-                error_message = f"Erro ao transformar e salvar os dados das estatisticas das partidas: {e}"
+                error_message = f"Erro ao transformar e salvar os dados das estatisticas dos jogadores das partidas: {e}"
                 raise RuntimeError(error_message)
 
         else:
