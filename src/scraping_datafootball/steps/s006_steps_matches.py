@@ -13,7 +13,7 @@ def get_matches(unique_tournament_id, season_id, round, slug=None):
     Busca os dados de uma partida de uma rodada de um torneio específico e temporada.
     """
     scraper = SofaScoreScraper()
-    if slug:
+    if slug not in (None, 'nan'):
         url = f"https://www.sofascore.com/api/v1/unique-tournament/{unique_tournament_id}/season/{season_id}/events/round/{round}/slug/{slug}"
     else:
         url = f"https://www.sofascore.com/api/v1/unique-tournament/{unique_tournament_id}/season/{season_id}/events/round/{round}"
