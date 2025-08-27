@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from airflow.decorators import dag, task
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from datetime import datetime
-import os
 
 from src.scraping_datafootball.steps.s006_steps_matches import extract_matches, transform_matches
 
@@ -10,26 +12,22 @@ from src.scraping_datafootball.utils.load_csv import load_csv_from_s3
 from src.scraping_datafootball.utils.load_response_json import load_response_json, load_response_json_from_s3
 from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_csv_to_s3
 
+from config.p000_input_dict import input_dict, save_location, source, bucket_name, region_name
+
+# Tirando duplicidade
+input_dict_original = input_dict.copy()
+combinations_seen = set()
+input_dict = []
+for item in input_dict_original:
+    # Cria uma tupla com os quatro valores que definem a unicidade
+    combination = (item['sport'], item['country'], item['tournament'], item['year'])
+    
+    if combination not in combinations_seen:
+        combinations_seen.add(combination)
+        input_dict.append(item)
+
 # Inputs
-save_location = 's3'
-source = 'sofascore'
 dag_path = '06-matches'
-bucket_name = 'gaa-datafootball'
-region_name = 'us-east-1'
-input_dict = [
-    {
-        "sport": "football",
-        "country": "13",
-        "tournament": '325',
-        "year": '2024'
-    },  
-    {
-        "sport": "football",
-        "country": "13",
-        "tournament": '373',
-        "year": '2024'
-    }
-]
 
 @dag(
     dag_id="sofascore_scrapper_06_matches",
@@ -39,7 +37,7 @@ input_dict = [
     catchup=False,
     tags=['scraping', 'matches']
 )
-def pipeline():
+def dag_sofascore_scrapper_06_matches():
     @task
     def obter_season_id(input_dict):
         sport = input_dict['sport']
@@ -81,17 +79,17 @@ def pipeline():
         return novo_input_dict
 
     @task
-    def consolidar_listas(novo_input_dict):
-        lista_consolidada = [item for sublist in novo_input_dict for item in sublist]
+    def consolidar_listas(input_dict):
+        lista_consolidada = [item for sublist in input_dict for item in sublist]
         return lista_consolidada
     
     @task
-    def obter_round_slug(novo_input_dict):
-        sport = novo_input_dict['sport']
-        country = novo_input_dict['country']
-        tournament = novo_input_dict['tournament']
-        year = novo_input_dict['year']
-        season = novo_input_dict['season']
+    def obter_round_slug_id(input_dict):
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
+        year = input_dict['year']
+        season = input_dict['season']
 
         # Seasons: 02-silver
         layer = '02-silver'
@@ -179,25 +177,25 @@ def pipeline():
         }
 
     @task
-    def extrair_e_salvar_dados(verificacao_dict, forcar = False):
+    def extrair_e_salvar_dados(input_dict, forcar = False):
         """
         Extrai os dados de Rounds e salva na camada Bronze no S3.
         Retorna o caminho completo do arquivo salvo.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        path_bronze = verificacao_dict['path_bronze']
-        exist_bronze = verificacao_dict['exist_bronze']
-        path_silver = verificacao_dict['path_silver']
-        exist_silver = verificacao_dict ['exist_silver']
-        title = verificacao_dict['title']
-        sport = verificacao_dict['sport']
-        country = verificacao_dict['country']
-        tournament = verificacao_dict['tournament']
-        year = verificacao_dict['year']
-        season = verificacao_dict['season']
-        round = verificacao_dict['round']
-        slug = verificacao_dict['slug']
+        path_bronze = input_dict['path_bronze']
+        exist_bronze = input_dict['exist_bronze']
+        path_silver = input_dict['path_silver']
+        exist_silver = input_dict ['exist_silver']
+        title = input_dict['title']
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
+        year = input_dict['year']
+        season = input_dict['season']
+        round = input_dict['round']
+        slug = input_dict['slug']
 
         if (exist_bronze == False or forcar == True):
             response_seasons = extract_matches(tournament, season, round, slug)
@@ -245,24 +243,24 @@ def pipeline():
             }
 
     @task
-    def transformar_e_salvar_dados(extract_dict, forcar = False):
+    def transformar_e_salvar_dados(input_dict, forcar = False):
         """
         Lê o arquivo da camada Bronze, transforma os dados e salva na camada Silver.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        path_bronze = extract_dict['path_bronze']
-        exist_bronze = extract_dict ['exist_bronze']
-        path_silver = extract_dict['path_silver']
-        exist_silver = extract_dict ['exist_silver']
-        title = extract_dict['title']
-        sport = extract_dict['sport']
-        country = extract_dict['country']
-        tournament = extract_dict['tournament']
-        year = extract_dict['year']
-        season = extract_dict['season']
-        round = extract_dict['round']
-        slug = extract_dict['slug']
+        path_bronze = input_dict['path_bronze']
+        exist_bronze = input_dict ['exist_bronze']
+        path_silver = input_dict['path_silver']
+        exist_silver = input_dict ['exist_silver']
+        title = input_dict['title']
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
+        year = input_dict['year']
+        season = input_dict['season']
+        round = input_dict['round']
+        slug = input_dict['slug']
 
         if (exist_silver == False or forcar == True):
             try:
@@ -299,12 +297,20 @@ def pipeline():
         else:
             print("O arquivo já existe na camada silver")
 
-    novo_input_dict = obter_season_id.expand(input_dict=input_dict)
-    novo_input_dict = consolidar_listas(novo_input_dict)
-    novo_input_dict = obter_round_slug.expand(novo_input_dict=novo_input_dict)
-    novo_input_dict = consolidar_listas(novo_input_dict)
-    verificacao_dict = verificar_existencia.expand(input_dict=novo_input_dict)
-    extract_dict = extrair_e_salvar_dados.partial(forcar=False).expand(verificacao_dict=verificacao_dict)
-    transformar_e_salvar_dados.partial(forcar=False).expand(extract_dict=extract_dict)
+    obter_seasons = obter_season_id.expand(input_dict=input_dict)
+    consolidar_seasons = consolidar_listas(obter_seasons)
+    obter_rounds_slugs = obter_round_slug_id.expand(input_dict=consolidar_seasons)
+    consolidar_rounds_slugs = consolidar_listas(obter_rounds_slugs)
+    verificacao = verificar_existencia.expand(input_dict=consolidar_rounds_slugs)
+    extracao = extrair_e_salvar_dados.partial(forcar=False).expand(input_dict=verificacao)
+    transformacao = transformar_e_salvar_dados.partial(forcar=False).expand(input_dict=extracao)
 
-pipeline()  
+    disparar_proxima_dag = TriggerDagRunOperator(
+        task_id='trigger_sofascore_scrapper_07_matches_statistics',
+        trigger_dag_id='sofascore_scrapper_07_matches_statistics',
+        conf={},
+    )
+
+    obter_seasons >> consolidar_seasons >> obter_rounds_slugs >> verificacao >> extracao >> transformacao >> disparar_proxima_dag
+
+dag_sofascore_scrapper_06_matches()  

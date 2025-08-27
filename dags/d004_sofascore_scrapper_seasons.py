@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from airflow.decorators import dag, task
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from datetime import datetime
-import os
 
 from src.scraping_datafootball.steps.s004_steps_seasons import extract_seasons, transform_seasons
 
@@ -9,55 +11,21 @@ from src.scraping_datafootball.utils.save_response_json import save_response_to_
 from src.scraping_datafootball.utils.load_response_json import load_response_json, load_response_json_from_s3
 from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_csv_to_s3
 
-# Inputs
-save_location = 's3'
-source = 'sofascore'
-dag_path = '04-seasons'
-bucket_name = 'gaa-datafootball'
-region_name = 'us-east-1'
-input_dict = [
-    {
-        "sport": "football",
-        "country": "13",
-        "tournament": '325'
-    },  
-    {
-        "sport": "football",
-        "country": "13",
-        "tournament": '373'
-    }
-]
+from config.p000_input_dict import input_dict, save_location, source, bucket_name, region_name
 
-#'14659', # Acreano
-#'10294', # Alagoano
-#'13668', # Amapazão
-#'11702', # Amazonense
-#'374', # Baiano
-#'325', # BrasileirÃ£o Betano
-#'390', # BrasileirÃ£o Série B
-#'11682', # Brasiliense
-#'14650', # Capixaba
-#'92', #	Carioca
-#'376', # Catarinense
-#'378', # Cearense
-#'373' # Copa Betano do Brasil
-#'1596', # Copa do Nordeste
-#'377', # GaÃºcho
-#'381', # Goiano
-#'11664', # Maranhense
-#'11669', # Paraense
-#'10295', # Paraibano
-#'382', # Paranaense
-#'372', # Paulista Série A1
-#'380', # Pernambucano
-#'13353', # Piauiense
-#'11663', # Potiguar, 1 Divisão 
-#'14658', # Rondoniense
-#'14733', # Roraimense
-#'11665', # Sergipano
-#'11679', # Sul-Mato-Grossense
-#'14602', # Supercopa do Brasil
-#'14686', # Tocantinense
+# Tirando duplicidade
+input_dict_original = input_dict.copy()
+combinations_seen = set()
+input_dict = []
+for item in input_dict_original:
+    # Cria uma tupla com os valores que definem a unicidade
+    combination = (item['sport'], item['country'], item['tournament'])
+    if combination not in combinations_seen:
+        combinations_seen.add(combination)
+        input_dict.append(item)
+
+# Inputs
+dag_path = '04-seasons'
 
 @dag(
     dag_id="sofascore_scrapper_04_seasons",
@@ -67,7 +35,7 @@ input_dict = [
     catchup=False,
     tags=['scraping', 'seasons']
 )
-def pipeline():
+def dag_sofascore_scrapper_04_seasons():
     @task
     def verificar_existencia(input_dict):
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -109,21 +77,21 @@ def pipeline():
         }
 
     @task
-    def extrair_e_salvar_dados(verificacao_dict, forcar = False):
+    def extrair_e_salvar_dados(input_dict, forcar = False):
         """
         Extrai os dados de Temporadas e salva na camada Bronze no S3.
         Retorna o caminho completo do arquivo salvo.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        path_bronze = verificacao_dict['path_bronze']
-        exist_bronze = verificacao_dict['exist_bronze']
-        path_silver = verificacao_dict['path_silver']
-        exist_silver = verificacao_dict ['exist_silver']
-        title = verificacao_dict['title']
-        sport = verificacao_dict['sport']
-        country = verificacao_dict['country']
-        tournament = verificacao_dict['tournament']
+        path_bronze = input_dict['path_bronze']
+        exist_bronze = input_dict['exist_bronze']
+        path_silver = input_dict['path_silver']
+        exist_silver = input_dict ['exist_silver']
+        title = input_dict['title']
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
 
         if (exist_bronze == False or forcar == True):
             response_seasons = extract_seasons(tournament)
@@ -163,20 +131,20 @@ def pipeline():
             }
         
     @task
-    def transformar_e_salvar_dados(extract_dict, forcar = False):
+    def transformar_e_salvar_dados(input_dict, forcar = False):
         """
         Lê o arquivo da camada Bronze, transforma os dados e salva na camada Silver.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        path_bronze = extract_dict['path_bronze']
-        exist_bronze = extract_dict ['exist_bronze']
-        path_silver = extract_dict['path_silver']
-        exist_silver = extract_dict ['exist_silver']
-        title = extract_dict['title']
-        sport = extract_dict['sport']
-        country = extract_dict['country']
-        tournament = extract_dict['tournament']
+        path_bronze = input_dict['path_bronze']
+        exist_bronze = input_dict ['exist_bronze']
+        path_silver = input_dict['path_silver']
+        exist_silver = input_dict ['exist_silver']
+        title = input_dict['title']
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
 
         if (exist_silver == False or forcar == True):
             try:
@@ -212,8 +180,16 @@ def pipeline():
         else:
             print("O arquivo já existe na camada silver")
 
-    verificacao_dict = verificar_existencia.expand(input_dict=input_dict)
-    extract_dict = extrair_e_salvar_dados.partial(forcar=False).expand(verificacao_dict=verificacao_dict)
-    transformar_e_salvar_dados.partial(forcar=False).expand(extract_dict=extract_dict)
+    verificacao = verificar_existencia.expand(input_dict=input_dict)
+    extracao = extrair_e_salvar_dados.partial(forcar=False).expand(input_dict=verificacao)
+    transformacao = transformar_e_salvar_dados.partial(forcar=False).expand(input_dict=extracao)
 
-pipeline()  
+    disparar_proxima_dag = TriggerDagRunOperator(
+        task_id='trigger_sofascore_scrapper_05_rounds',
+        trigger_dag_id='sofascore_scrapper_05_rounds',
+         conf={},
+    )
+
+    verificacao >> extracao >> transformacao >> disparar_proxima_dag
+
+dag_sofascore_scrapper_04_seasons()  
