@@ -10,26 +10,22 @@ from src.scraping_datafootball.utils.load_csv import load_csv_from_s3
 from src.scraping_datafootball.utils.load_response_json import load_response_json, load_response_json_from_s3
 from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_csv_to_s3
 
+from config.p000_input_dict import input_dict, save_location, source, bucket_name, region_name
+
+# Tirando duplicidade
+input_dict_original = input_dict.copy()
+combinations_seen = set()
+input_dict = []
+for item in input_dict_original:
+    # Cria uma tupla com os quatro valores que definem a unicidade
+    combination = (item['sport'], item['country'], item['tournament'], item['year'])
+    
+    if combination not in combinations_seen:
+        combinations_seen.add(combination)
+        input_dict.append(item)
+
 # Inputs
-save_location = 's3'
-source = 'sofascore'
 dag_path = '09-lineups-statistics'
-bucket_name = 'gaa-datafootball'
-region_name = 'us-east-1'
-input_dict = [
-    {
-        "sport": "football",
-        "country": "13",
-        "tournament": '325',
-        "year": '2024'
-    },  
-    {
-        "sport": "football",
-        "country": "13",
-        "tournament": '373',
-        "year": '2024'
-    }
-]
 
 @dag(
     dag_id="sofascore_scrapper_09_lineups_statistics",
@@ -39,7 +35,7 @@ input_dict = [
     catchup=False,
     tags=['scraping', 'lineups']
 )
-def pipeline():
+def dag_sofascore_scrapper_09_lineups_statistics():
     @task
     def obter_season_id(input_dict):
         sport = input_dict['sport']
@@ -355,4 +351,4 @@ def pipeline():
     extract_dict = extrair_e_salvar_dados.partial(forcar=False).expand(verificacao_dict=verificacao_dict)
     transformar_e_salvar_dados.partial(forcar=False).expand(extract_dict=extract_dict)
 
-pipeline()  
+dag_sofascore_scrapper_09_lineups_statistics()  

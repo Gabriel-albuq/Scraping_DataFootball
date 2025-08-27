@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from airflow.decorators import dag, task
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from datetime import datetime
-import os
 
 from src.scraping_datafootball.steps.s002_steps_countries import extract_countries, transform_countries
 
@@ -9,17 +11,20 @@ from src.scraping_datafootball.utils.save_response_json import save_response_to_
 from src.scraping_datafootball.utils.load_response_json import load_response_json, load_response_json_from_s3
 from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_csv_to_s3
 
+from config.p000_input_dict import input_dict, save_location, source, bucket_name, region_name
+
+# Tirando duplicidade
+input_dict_original = input_dict.copy()
+sports_seen = set()
+input_dict = []
+for item in input_dict_original:
+    sport_value = item['sport']
+    if sport_value not in sports_seen:
+        sports_seen.add(sport_value)
+        input_dict.append(item)
+
 # Inputs
-save_location = 's3'
-source = 'sofascore'
 dag_path = '02-countries'
-bucket_name = 'gaa-datafootball'
-region_name = 'us-east-1'
-input_dict = [
-    {
-        "sport": "football"
-    }
-]
 
 @dag(
     dag_id="sofascore_scrapper_02_countries",
@@ -29,7 +34,7 @@ input_dict = [
     catchup=False,
     tags=['scraping', 'countries']
 )
-def pipeline():
+def dag_sofascore_scrapper_02_countries():
     @task
     def verificar_existencia(input_dict):
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -67,19 +72,19 @@ def pipeline():
         }
     
     @task
-    def extrair_e_salvar_dados(verificacao_dict, forcar = False):
+    def extrair_e_salvar_dados(input_dict, forcar = False):
         """
         Extrai os dados de Países e salva na camada Bronze no S3.
         Retorna o caminho completo do arquivo salvo.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        path_bronze = verificacao_dict['path_bronze']
-        exist_bronze = verificacao_dict['exist_bronze']
-        path_silver = verificacao_dict['path_silver']
-        exist_silver = verificacao_dict ['exist_silver']
-        title = verificacao_dict['title']
-        sport = verificacao_dict['sport']
+        path_bronze = input_dict['path_bronze']
+        exist_bronze = input_dict['exist_bronze']
+        path_silver = input_dict['path_silver']
+        exist_silver = input_dict ['exist_silver']
+        title = input_dict['title']
+        sport = input_dict['sport']
 
         if (exist_bronze == False or forcar == True):
             response_countries = extract_countries(sport)
@@ -115,18 +120,18 @@ def pipeline():
             }
         
     @task
-    def transformar_e_salvar_dados(extract_dict, forcar = False):
+    def transformar_e_salvar_dados(input_dict, forcar = False):
         """
         Lê o arquivo da camada Bronze, transforma os dados e salva na camada Silver.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        path_bronze = extract_dict['path_bronze']
-        exist_bronze = extract_dict ['exist_bronze']
-        path_silver = extract_dict['path_silver']
-        exist_silver = extract_dict ['exist_silver']
-        title = extract_dict['title']
-        sport = extract_dict['sport']
+        path_bronze = input_dict['path_bronze']
+        exist_bronze = input_dict ['exist_bronze']
+        path_silver = input_dict['path_silver']
+        exist_silver = input_dict ['exist_silver']
+        title = input_dict['title']
+        sport = input_dict['sport']
 
         if (exist_silver == False or forcar == True):
             try:
@@ -163,8 +168,16 @@ def pipeline():
         else:
             print("O arquivo já existe na camada silver")
 
-    verificacao_dict = verificar_existencia.expand(input_dict=input_dict)
-    extract_dict = extrair_e_salvar_dados.partial(forcar=False).expand(verificacao_dict=verificacao_dict)
-    transformar_e_salvar_dados.partial(forcar=False).expand(extract_dict=extract_dict)
+    verificacao = verificar_existencia.expand(input_dict=input_dict)
+    extracao = extrair_e_salvar_dados.partial(forcar=False).expand(input_dict=verificacao)
+    transformacao = transformar_e_salvar_dados.partial(forcar=False).expand(input_dict=extracao)
 
-pipeline()
+    disparar_proxima_dag = TriggerDagRunOperator(
+        task_id='trigger_sofascore_scrapper_03_tournaments',
+        trigger_dag_id='sofascore_scrapper_03_tournaments',
+         conf={},
+    )
+
+    verificacao >> extracao >> transformacao >> disparar_proxima_dag
+
+dag_sofascore_scrapper_02_countries()
