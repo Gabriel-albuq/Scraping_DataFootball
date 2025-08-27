@@ -77,17 +77,17 @@ def dag_sofascore_scrapper_09_lineups_statistics():
         return novo_input_dict
 
     @task
-    def consolidar_listas(novo_input_dict):
-        lista_consolidada = [item for sublist in novo_input_dict for item in sublist]
+    def consolidar_listas(input_dict):
+        lista_consolidada = [item for sublist in input_dict for item in sublist]
         return lista_consolidada
     
     @task
-    def obter_round_slug_id(novo_input_dict):
-        sport = novo_input_dict['sport']
-        country = novo_input_dict['country']
-        tournament = novo_input_dict['tournament']
-        year = novo_input_dict['year']
-        season = novo_input_dict['season']
+    def obter_round_slug_id(input_dict):
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
+        year = input_dict['year']
+        season = input_dict['season']
 
         # Seasons: 02-silver
         layer = '02-silver'
@@ -127,14 +127,14 @@ def dag_sofascore_scrapper_09_lineups_statistics():
         return novo_input_dict
 
     @task
-    def obter_matches_id(novo_input_dict):
-        sport = novo_input_dict['sport']
-        country = novo_input_dict['country']
-        tournament = novo_input_dict['tournament']
-        year = novo_input_dict['year']
-        season = novo_input_dict['season']
-        round = novo_input_dict['round']
-        slug = novo_input_dict['slug']
+    def obter_matches_id(input_dict):
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
+        year = input_dict['year']
+        season = input_dict['season']
+        round = input_dict['round']
+        slug = input_dict['slug']
 
         # Seasons: 02-silver
         layer = '02-silver'
@@ -167,7 +167,7 @@ def dag_sofascore_scrapper_09_lineups_statistics():
         ]
 
         if not list_values:
-            raise ValueError(f"Não foram encontradas estatisticas dos jogadores para a temporada {season} rodada {round} slug {slug}.")
+            raise ValueError(f"Não foram encontradas jogadores para a temporada {season} rodada {round} slug {slug}.")
 
         return novo_input_dict
 
@@ -222,26 +222,26 @@ def dag_sofascore_scrapper_09_lineups_statistics():
         }
 
     @task
-    def extrair_e_salvar_dados(verificacao_dict, forcar = False):
+    def extrair_e_salvar_dados(input_dict, forcar = False):
         """
         Extrai os dados de Estatísticas dos Jogadores e salva na camada Bronze no S3.
         Retorna o caminho completo do arquivo salvo.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        path_bronze = verificacao_dict['path_bronze']
-        exist_bronze = verificacao_dict['exist_bronze']
-        path_silver = verificacao_dict['path_silver']
-        exist_silver = verificacao_dict ['exist_silver']
-        title = verificacao_dict['title']
-        sport = verificacao_dict['sport']
-        country = verificacao_dict['country']
-        tournament = verificacao_dict['tournament']
-        year = verificacao_dict['year']
-        season = verificacao_dict['season']
-        round = verificacao_dict['round']
-        slug = verificacao_dict['slug']
-        match = verificacao_dict['match']
+        path_bronze = input_dict['path_bronze']
+        exist_bronze = input_dict['exist_bronze']
+        path_silver = input_dict['path_silver']
+        exist_silver = input_dict ['exist_silver']
+        title = input_dict['title']
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
+        year = input_dict['year']
+        season = input_dict['season']
+        round = input_dict['round']
+        slug = input_dict['slug']
+        match = input_dict['match']
 
         if (exist_bronze == False or forcar == True):
             response_seasons = extract_lineups_statistics(match)
@@ -292,25 +292,25 @@ def dag_sofascore_scrapper_09_lineups_statistics():
             }
 
     @task
-    def transformar_e_salvar_dados(extract_dict, forcar = False):
+    def transformar_e_salvar_dados(input_dict, forcar = False):
         """
         Lê o arquivo da camada Bronze, transforma os dados e salva na camada Silver.
         """
         datetime_now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        path_bronze = extract_dict['path_bronze']
-        exist_bronze = extract_dict ['exist_bronze']
-        path_silver = extract_dict['path_silver']
-        exist_silver = extract_dict ['exist_silver']
-        title = extract_dict['title']
-        sport = extract_dict['sport']
-        country = extract_dict['country']
-        tournament = extract_dict['tournament']
-        year = extract_dict['year']
-        season = extract_dict['season']
-        round = extract_dict['round']
-        slug = extract_dict['slug']
-        match = extract_dict['match']
+        path_bronze = input_dict['path_bronze']
+        exist_bronze = input_dict ['exist_bronze']
+        path_silver = input_dict['path_silver']
+        exist_silver = input_dict ['exist_silver']
+        title = input_dict['title']
+        sport = input_dict['sport']
+        country = input_dict['country']
+        tournament = input_dict['tournament']
+        year = input_dict['year']
+        season = input_dict['season']
+        round = input_dict['round']
+        slug = input_dict['slug']
+        match = input_dict['match']
 
         if (exist_silver == False or forcar == True):
             try:
@@ -351,6 +351,6 @@ def dag_sofascore_scrapper_09_lineups_statistics():
     extracao = extrair_e_salvar_dados.partial(forcar=False).expand(input_dict=verificacao)
     transformacao = transformar_e_salvar_dados.partial(forcar=False).expand(input_dict=extracao)
 
-    obter_seasons >> consolidar_seasons >> obter_rounds_slugs >> verificacao >> extracao >> transformacao
+    obter_seasons >> consolidar_seasons >> obter_rounds_slugs >> consolidar_rounds_slugs >> obter_matches >> consolidar_matches >> verificacao >> extracao >> transformacao
 
 dag_sofascore_scrapper_09_lineups_statistics()  
