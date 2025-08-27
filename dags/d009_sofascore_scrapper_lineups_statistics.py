@@ -82,7 +82,7 @@ def dag_sofascore_scrapper_09_lineups_statistics():
         return lista_consolidada
     
     @task
-    def obter_round_slug(novo_input_dict):
+    def obter_round_slug_id(novo_input_dict):
         sport = novo_input_dict['sport']
         country = novo_input_dict['country']
         tournament = novo_input_dict['tournament']
@@ -127,7 +127,7 @@ def dag_sofascore_scrapper_09_lineups_statistics():
         return novo_input_dict
 
     @task
-    def obter_matches(novo_input_dict):
+    def obter_matches_id(novo_input_dict):
         sport = novo_input_dict['sport']
         country = novo_input_dict['country']
         tournament = novo_input_dict['tournament']
@@ -341,14 +341,16 @@ def dag_sofascore_scrapper_09_lineups_statistics():
         else:
             print("O arquivo já existe na camada silver")
 
-    novo_input_dict = obter_season_id.expand(input_dict=input_dict)
-    novo_input_dict = consolidar_listas(novo_input_dict)
-    novo_input_dict = obter_round_slug.expand(novo_input_dict=novo_input_dict)
-    novo_input_dict = consolidar_listas(novo_input_dict)
-    novo_input_dict = obter_matches.expand(novo_input_dict=novo_input_dict)
-    novo_input_dict = consolidar_listas(novo_input_dict)
-    verificacao_dict = verificar_existencia.expand(input_dict=novo_input_dict)
-    extract_dict = extrair_e_salvar_dados.partial(forcar=False).expand(verificacao_dict=verificacao_dict)
-    transformar_e_salvar_dados.partial(forcar=False).expand(extract_dict=extract_dict)
+    obter_seasons = obter_season_id.expand(input_dict=input_dict)
+    consolidar_seasons = consolidar_listas(obter_seasons)
+    obter_rounds_slugs = obter_round_slug_id.expand(input_dict=consolidar_seasons)
+    consolidar_rounds_slugs = consolidar_listas(obter_rounds_slugs)
+    obter_matches = obter_matches_id.expand(input_dict=consolidar_rounds_slugs)
+    consolidar_matches = consolidar_listas(obter_matches)
+    verificacao = verificar_existencia.expand(input_dict=consolidar_matches)
+    extracao = extrair_e_salvar_dados.partial(forcar=False).expand(input_dict=verificacao)
+    transformacao = transformar_e_salvar_dados.partial(forcar=False).expand(input_dict=extracao)
+
+    obter_seasons >> consolidar_seasons >> obter_rounds_slugs >> verificacao >> extracao >> transformacao
 
 dag_sofascore_scrapper_09_lineups_statistics()  
