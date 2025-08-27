@@ -359,6 +359,7 @@ def dag_sofascore_scrapper_08_lineups():
         conf={},
     )
 
-    obter_seasons >> consolidar_seasons >> obter_rounds_slugs >> verificacao >> extracao >> transformacao >> disparar_proxima_dag
+    obter_seasons >> consolidar_seasons >> obter_rounds_slugs >> consolidar_rounds_slugs >> obter_matches >> consolidar_matches >> verificacao >> extracao >> transformacao
+
 
 dag_sofascore_scrapper_08_lineups()  
