@@ -347,7 +347,9 @@ def dag_sofascore_scrapper_08_lineups():
     consolidar_seasons = consolidar_listas(obter_seasons)
     obter_rounds_slugs = obter_round_slug_id.expand(input_dict=consolidar_seasons)
     consolidar_rounds_slugs = consolidar_listas(obter_rounds_slugs)
-    verificacao = verificar_existencia.expand(input_dict=consolidar_rounds_slugs)
+    obter_matches = obter_matches_id.expand(input_dict=consolidar_rounds_slugs)
+    consolidar_matches = consolidar_listas(obter_matches)
+    verificacao = verificar_existencia.expand(input_dict=consolidar_matches)
     extracao = extrair_e_salvar_dados.partial(forcar=False).expand(input_dict=verificacao)
     transformacao = transformar_e_salvar_dados.partial(forcar=False).expand(input_dict=extracao)
 
