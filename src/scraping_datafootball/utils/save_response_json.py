@@ -2,8 +2,9 @@ import os
 import json
 import boto3
 from io import StringIO
+from dotenv import load_dotenv
 
-def save_response_to_json(data, path, title):
+def save_response_json_local(data, path, title):
     """
     Salva dados em formato JSON no caminho especificado com o título dado.
 
@@ -23,7 +24,10 @@ def save_response_to_json(data, path, title):
     
     print(f"Arquivo JSON salvo com sucesso em: {file_path}")
 
-def save_response_json_to_s3(data, bucket_name, path, title, region='us-east-1'):
+    return True
+
+
+def save_response_json_s3(data, bucket_name, path, title, region='us-east-1'):
     """
     Salva dados em formato JSON diretamente em um bucket do Amazon S3.
 
@@ -52,3 +56,24 @@ def save_response_json_to_s3(data, bucket_name, path, title, region='us-east-1')
     except Exception as e:
         print(f"Erro ao salvar o arquivo JSON no S3: {e}")
         raise e
+    
+    
+def save_response_json(data, local, path, title, region=None, bucket_name = None):
+    """
+    Salva dados em formato JSON localmente ou em um bucket do Amazon S3.
+
+    :param data: dict - Os dados a serem serializados e salvos.
+    :param path: str - O caminho do diretório dentro do bucket (ex: 'data/raw/').
+    :param title: str - O nome do arquivo CSV a ser lido, com a extensão .csv (ex: 'dados.csv').
+    :param region: str - Caso local = s3, a região da AWS onde o bucket S3 está localizado.
+    :param bucket_name: str - Caso local = s3, o nome do bucket S3 de origem.
+
+    :return: str - True se tudo der certo ou o erro.
+    """
+
+    if local in ('s3', 'S3'):
+        return save_response_json_s3(data, bucket_name, path, title, region)
+        
+    else:
+        path = f'{local}/{path}'
+        return save_response_json_local(data, path, title)

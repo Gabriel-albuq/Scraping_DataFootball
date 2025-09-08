@@ -6,3 +6,30 @@ services:
     restart: "no"
     env_file:
       - .env
+
+  airflow-scheduler:
+    user: "${UID}:${GID}"
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+      - ./logs:/usr/local/airflow/logs
+      - ./plugins:/usr/local/airflow/plugins
+      - ./src: /usr/local/airflow/src
+      - ./data:/usr/local/airflow/data
+
+  airflow-webserver:
+    user: "${UID}:${GID}"
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+      - ./logs:/usr/local/airflow/logs
+      - ./plugins:/usr/local/airflow/plugins
+      - ./src: /usr/local/airflow/src
+      - ./data:/usr/local/airflow/data
+
+  airflow-worker:
+    user: "${UID}:${GID}"
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+      - ./logs:/usr/local/airflow/logs
+      - ./plugins:/usr/local/airflow/plugins
+      - ./src: /usr/local/airflow/src
+      - ./data:/usr/local/airflow/data

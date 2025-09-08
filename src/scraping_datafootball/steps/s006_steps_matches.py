@@ -5,8 +5,6 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 from ..scrapers.sofascore_scraper_curl import SofaScoreScraper
-from ..utils.save_response_json import save_response_to_json, save_response_json_to_s3
-from ..utils.save_dataframe_csv import save_dataframe_to_csv
 
 def get_matches(unique_tournament_id, season_id, round, slug=None):
     """

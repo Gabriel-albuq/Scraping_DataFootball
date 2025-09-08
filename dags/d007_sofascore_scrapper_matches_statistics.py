@@ -6,7 +6,7 @@ from datetime import datetime
 
 from src.scraping_datafootball.steps.s007_steps_matches_statistics import extract_matches_statistics, transform_matches_statistics
 
-from src.scraping_datafootball.utils.check_existencia_s3 import check_existencia_s3
+from src.scraping_datafootball.utils.check_existencia import check_existencia_local, check_existencia_s3
 from src.scraping_datafootball.utils.save_response_json import save_response_to_json, save_response_json_to_s3
 from src.scraping_datafootball.utils.load_csv import load_csv_from_s3
 from src.scraping_datafootball.utils.load_response_json import load_response_json, load_response_json_from_s3
@@ -189,23 +189,37 @@ def dag_sofascore_scrapper_07_matches_statistics():
 
         # 01-bronze
         layer = '01-bronze'
-        path_bronze = f'{source}/{layer}/{dag_path}'
-        exist_bronze = check_existencia_s3(
-                            bucket_name=bucket_name,
-                            path=path_bronze,
-                            title=title,
-                            region=region_name
-                        )
+        if save_location in ('s3', 'S3'): 
+            path_bronze = f'{source}/{layer}/{dag_path}'
+            exist_bronze = check_existencia_s3(
+                                bucket_name=bucket_name,
+                                path=path_bronze,
+                                title=title,
+                                region=region_name
+                            )
+        else:
+            path_bronze = f'{save_location}/{source}/{layer}/{dag_path}'
+            exist_bronze = check_existencia_local(
+                                path=path_bronze,
+                                title=title,
+                            )
 
         # 02-silver
         layer = '02-silver'
-        path_silver = f'{source}/{layer}/{dag_path}'
-        exist_silver = check_existencia_s3(
-                            bucket_name=bucket_name,
-                            path=path_silver,
-                            title=title,
-                            region=region_name
-                        )
+        if save_location in ('s3', 'S3'): 
+            path_silver = f'{source}/{layer}/{dag_path}'
+            exist_silver = check_existencia_s3(
+                                bucket_name=bucket_name,
+                                path=path_silver,
+                                title=title,
+                                region=region_name
+                            )
+        else:
+            path_silver = f'{save_location}/{source}/{layer}/{dag_path}'
+            exist_silver = check_existencia_local(
+                                path=path_silver,
+                                title=title,
+                            )
         
         return {
             "path_bronze": path_bronze,

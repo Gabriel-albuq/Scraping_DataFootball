@@ -6,11 +6,11 @@ from datetime import datetime
 
 from src.scraping_datafootball.steps.s005_steps_rounds import extract_rounds, transform_rounds
 
-from src.scraping_datafootball.utils.check_existencia_s3 import check_existencia_s3
-from src.scraping_datafootball.utils.save_response_json import save_response_to_json, save_response_json_to_s3
-from src.scraping_datafootball.utils.load_csv import load_csv_from_s3
-from src.scraping_datafootball.utils.load_response_json import load_response_json, load_response_json_from_s3
-from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_csv_to_s3
+from src.scraping_datafootball.utils.check_existencia import check_existencia
+from src.scraping_datafootball.utils.save_response_json import save_response_json
+from src.scraping_datafootball.utils.load_response_json import load_response_json
+from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_csv
+from src.scraping_datafootball.utils.load_csv import load_csv
 
 from config.p000_input_dict import input_dict, save_location, source, bucket_name, region_name
 
@@ -51,7 +51,8 @@ def dag_sofascore_scrapper_05_rounds():
         title_seasons = f'seasons_{sport}_{country}_{tournament}'
 
         print(f"Lendo dados do S3 em: s3://{bucket_name}/{path_seasons}/{title_seasons}")
-        df = load_csv_from_s3(
+        df = load_csv(
+            local = save_location,
             bucket_name=bucket_name,
             path=path_seasons,
             title=title_seasons,
@@ -97,21 +98,23 @@ def dag_sofascore_scrapper_05_rounds():
         # 01-bronze
         layer = '01-bronze'
         path_bronze = f'{source}/{layer}/{dag_path}'
-        exist_bronze = check_existencia_s3(
-                            bucket_name=bucket_name,
+        exist_bronze = check_existencia(
+                            local = save_location,
                             path=path_bronze,
                             title=title,
-                            region=region_name
+                            region=region_name,
+                            bucket_name=bucket_name,
                         )
 
         # 02-silver
         layer = '02-silver'
         path_silver = f'{source}/{layer}/{dag_path}'
-        exist_silver = check_existencia_s3(
-                            bucket_name=bucket_name,
+        exist_silver = check_existencia(
+                            local = save_location,
                             path=path_silver,
                             title=title,
-                            region=region_name
+                            region=region_name,
+                            bucket_name=bucket_name,
                         )
         
         return {
@@ -149,7 +152,8 @@ def dag_sofascore_scrapper_05_rounds():
         if (exist_bronze == False or forcar == True):
             response_seasons = extract_rounds(tournament, season)
             if response_seasons:
-                save_response_json_to_s3(
+                save_response_json(
+                    local = save_location,
                     data=response_seasons, 
                     bucket_name=bucket_name,
                     path=path_bronze,
@@ -208,7 +212,8 @@ def dag_sofascore_scrapper_05_rounds():
         if (exist_silver == False or forcar == True):
             try:
                 print(f"Lendo dados do S3 em: s3://{bucket_name}/{path_bronze}/{title}")
-                json_data = load_response_json_from_s3(
+                json_data = load_response_json(
+                    local = save_location,
                     bucket_name=bucket_name,
                     path=path_bronze,
                     title=title,
@@ -218,7 +223,8 @@ def dag_sofascore_scrapper_05_rounds():
                 if json_data is not None:
                     df_data = transform_rounds(json_data, datetime_now)
                     if not df_data.empty:
-                        save_dataframe_csv_to_s3(
+                        save_dataframe_csv(
+                            local = save_location,
                             df=df_data,
                             bucket_name=bucket_name,
                             path=path_silver,

@@ -1,4 +1,4 @@
-save_location = 'data'
+save_location = 's3'
 source = 'sofascore'
 bucket_name = 'gaa-datafootball'
 region_name = 'us-east-1'

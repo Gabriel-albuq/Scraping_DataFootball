@@ -6,10 +6,10 @@ from datetime import datetime
 
 from src.scraping_datafootball.steps.s002_steps_countries import extract_countries, transform_countries
 
-from src.scraping_datafootball.utils.check_existencia_s3 import check_existencia_s3
-from src.scraping_datafootball.utils.save_response_json import save_response_to_json, save_response_json_to_s3
-from src.scraping_datafootball.utils.load_response_json import load_response_json, load_response_json_from_s3
-from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_csv_to_s3
+from src.scraping_datafootball.utils.check_existencia import check_existencia
+from src.scraping_datafootball.utils.save_response_json import save_response_json
+from src.scraping_datafootball.utils.load_response_json import load_response_json
+from src.scraping_datafootball.utils.save_dataframe_csv import save_dataframe_csv
 
 from config.p000_input_dict import input_dict, save_location, source, bucket_name, region_name
 
@@ -45,21 +45,23 @@ def dag_sofascore_scrapper_02_countries():
         # 01-bronze
         layer = '01-bronze'
         path_bronze = f'{source}/{layer}/{dag_path}'
-        exist_bronze = check_existencia_s3(
-                            bucket_name=bucket_name,
+        exist_bronze = check_existencia(
+                            local = save_location,
                             path=path_bronze,
                             title=title,
-                            region=region_name
+                            region=region_name,
+                            bucket_name=bucket_name,
                         )
 
         # 02-silver
         layer = '02-silver'
         path_silver = f'{source}/{layer}/{dag_path}'
-        exist_silver = check_existencia_s3(
-                            bucket_name=bucket_name,
+        exist_silver = check_existencia(
+                            local = save_location,
                             path=path_silver,
                             title=title,
-                            region=region_name
+                            region=region_name,
+                            bucket_name=bucket_name,
                         )
         
         return {
@@ -89,7 +91,8 @@ def dag_sofascore_scrapper_02_countries():
         if (exist_bronze == False or forcar == True):
             response_countries = extract_countries(sport)
             if response_countries:
-                save_response_json_to_s3(
+                save_response_json(
+                    local = save_location,
                     data=response_countries, 
                     bucket_name=bucket_name,
                     path=path_bronze,
@@ -136,7 +139,8 @@ def dag_sofascore_scrapper_02_countries():
         if (exist_silver == False or forcar == True):
             try:
                 print(f"Lendo dados do S3 em: s3://{bucket_name}/{path_bronze}/{title}")
-                json_data = load_response_json_from_s3(
+                json_data = load_response_json(
+                    local = save_location,
                     bucket_name=bucket_name,
                     path=path_bronze,
                     title=title,
@@ -146,7 +150,8 @@ def dag_sofascore_scrapper_02_countries():
                 if json_data is not None:
                     df_data = transform_countries(json_data, datetime_now)
                     if not df_data.empty:
-                        save_dataframe_csv_to_s3(
+                        save_dataframe_csv(
+                            local = save_location,
                             df=df_data,
                             bucket_name=bucket_name,
                             path=path_silver,
